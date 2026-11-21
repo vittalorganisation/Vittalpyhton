@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vittal Python Compiler</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Fira Code for crisp monospace & Outfit for UI -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Skulpt Python 3 in-browser compiler (Fast, lightweight, supports interactive input()) -->
+    <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
+
+    <style>
+        :root {
+            --bg-main: #090714;
+            --bg-panel: #120f26;
+            --bg-toolbar: #191536;
+            --border-glow: rgba(168, 85, 247, 0.35);
+            --accent-1: #ff2a85;
+            --accent-2: #00f0ff;
+            --accent-3: #a855f7;
+            --accent-4: #facc15;
+            --text-primary: #f8fafc;
+            --text-muted: #94a3b8;
+            --editor-font-size: 14px;
+            --editor-line-height: 22px;
+            --terminal-font-size: 13px;
+        }
+
+        /* Theme: Rainbow Candy */
+        body.theme-candy {
+            --bg-main: #180b29;
+            --bg-panel: #24113d;
+            --bg-toolbar: #311754;
+            --border-glow: rgba(244, 114, 182, 0.45);
+            --accent-1: #ff47a3;
+            --accent-2: #38bdf8;
+            --accent-3: #fbbf24;
+            --accent-4: #34d399;
+        }
+
+        /* Theme: Midnight Aurora */
+        body.theme-aurora {
+            --bg-main: #041318;
+            --bg-panel: #082028;
+            --bg-toolbar: #0d2f3b;
+            --border-glow: rgba(16, 185, 129, 0.4);
+            --accent-1: #10b981;
+            --accent-2: #06b6d4;
+            --accent-3: #8b5cf6;
+            --accent-4: #f43f5e;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            height: 100dvh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.4s ease;
+        }
+
+        /* Animated Gradient Text & Backgrounds */
+        .rainbow-text {
+            background: linear-gradient(90deg, #ff2a85, #ff8a00, #facc15, #22c55e, #00f0ff, #a855f7, #ff2a85);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: rainbowFlow 4s linear infinite;
+        }
+
+        .rainbow-bg {
+            background: linear-gradient(135deg, #ff2a85, #ff7b00, #a855f7, #00d2ff);
+            background-size: 300% 300%;
+            animation: gradientShift 5s ease infinite;
+        }
+
+        .run-btn-glow {
+            background: linear-gradient(90deg, #00f260, #0575e6, #ff2a85);
+            background-size: 200% auto;
+            animation: rainbowFlow 3s linear infinite;
+            box-shadow: 0 0 18px rgba(0, 242, 96, 0.45);
+        }
+
+        @keyframes rainbowFlow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Splash Screen */
+        #splash-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: radial-gradient(circle at top right, #2e1065 0%, #090714 55%, #041e2e 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.65s cubic-bezier(0.4, 0, 0.2, 1), transform 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #splash-screen.fade-out {
+            opacity: 0;
+            transform: scale(1.06);
+            pointer-events: none;
+        }
+
+        .terminal-blink {
+            animation: blinkCursor 1s step-end infinite;
+        }
+
+        @keyframes blinkCursor {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        .logo-float {
+            animation: floatBounce 2.5s ease-in-out infinite;
+        }
+
+        @keyframes floatBounce {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(2deg); }
+        }
+
+        /* Code Editor Layered Architecture */
+        .editor-container {
+            position: relative;
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            background-color: var(--bg-panel);
+        }
+
+        .line-numbers {
+            width: 42px;
+            padding: 14px 6px 14px 0;
+            text-align: right;
+            font-family: 'Fira Code', monospace;
+            font-size: var(--editor-font-size);
+            line-height: var(--editor-line-height);
+            color: #64748b;
+            background: rgba(0, 0, 0, 0.22);
+            border-right: 1px solid rgba(255, 255, 255, 0.06);
+            user-select: none;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .line-numbers .active-line-num {
+            color: #00f0ff;
+            font-weight: 700;
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.7);
+        }
+
+        .code-wrapper {
+            position: relative;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Active Line Rainbow Highlight Bar */
+        #active-line-highlight {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: var(--editor-line-height);
+            top: 14px;
+            background: linear-gradient(90deg, rgba(255, 42, 133, 0.16), rgba(0, 240, 255, 0.12), rgba(168, 85, 247, 0.05));
+            border-left: 3px solid #ff2a85;
+            pointer-events: none;
+            transition: top 0.08s ease-out;
+            z-index: 1;
+        }
+
+        #code-backdrop, #code-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 14px 14px 60px 12px;
+            font-family: 'Fira Code', monospace;
+            font-size: var(--editor-font-size);
+            line-height: var(--editor-line-height);
+            letter-spacing: 0px;
+            tab-size: 4;
+            white-space: pre;
+            overflow: auto;
+            border: none;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        #code-backdrop {
+            z-index: 2;
+            pointer-events: none;
+            color: #e2e8f0;
+        }
+
+        #code-input {
+            z-index: 3;
+            background: transparent;
+            color: transparent;
+            caret-color: #00f0ff;
+            resize: none;
+            -webkit-text-fill-color: transparent;
+        }
+
+        #code-input::selection {
+            background: rgba(168, 85, 247, 0.38);
+        }
+
+        /* Vivid Multi-Colour Syntax Highlighting Tokens */
+        .tok-keyword { color: #ff3b9a; font-weight: 600; text-shadow: 0 0 10px rgba(255, 59, 154, 0.3); }
+        .tok-builtin { color: #00f0ff; font-weight: 600; }
+        .tok-string  { color: #fde047; }
+        .tok-number  { color: #fb923c; font-weight: 600; }
+        .tok-comment { color: #64748b; font-style: italic; }
+        .tok-func    { color: #4ade80; font-weight: 600; }
+        .tok-op      { color: #c084fc; font-weight: 600; }
+        .tok-paren   { color: #38bdf8; }
+
+        /* Hide scrollbars cleanly on horizontal symbol strip */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Particle Canvas for Colorful Typing Bursts */
+        #fx-canvas {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* Symbol Quick-Key Tactile Pop */
+        .sym-key {
+            transition: transform 0.1s ease, background-color 0.15s ease;
+        }
+        .sym-key:active {
+            transform: scale(0.9);
+        }
+    </style>
+</head>
+<body class="theme-cyber">
+
+    <!-- Particle Burst Canvas for Multi-Color Typing FX -->
+    <canvas id="fx-canvas"></canvas>
+
+    <!-- ========================================================= -->
+    <!-- 1. VIBRANT ANIMATED SPLASH SCREEN                         -->
+    <!-- ========================================================= -->
+    <div id="splash-screen" class="cursor-pointer select-none" title="Tap anywhere to skip">
+        <!-- Decorative Glowing Orbs -->
+        <div class="absolute top-16 left-8 w-44 h-44 bg-pink-500/25 rounded-full blur-3xl animate-pulse"></div>
+        <div class="absolute bottom-20 right-8 w-52 h-52 bg-cyan-400/25 rounded-full blur-3xl animate-pulse"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-purple-600/20 rounded-full blur-3xl"></div>
+
+        <!-- Custom Colorful Python SVG Emblem -->
+        <div class="logo-float relative mb-6">
+            <div class="w-28 h-28 rounded-3xl p-1 rainbow-bg shadow-2xl shadow-purple-500/40 flex items-center justify-center">
+                <div class="w-full h-full bg-[#0d0a1f] rounded-[21px] flex items-center justify-center relative overflow-hidden">
+                    <svg class="w-16 h-16" viewBox="0 0 110 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="pyTop" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#00f0ff"/>
+                                <stop offset="100%" stop-color="#a855f7"/>
+                            </linearGradient>
+                            <linearGradient id="pyBot" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#ff2a85"/>
+                                <stop offset="100%" stop-color="#facc15"/>
+                            </linearGradient>
+                        </defs>
+                        <!-- Upper Python Snake -->
+                        <path d="M54.5 12C35.2 12 36.4 20.4 36.4 20.4L36.5 29.1H55V31.8H29.1C29.1 31.8 16.5 30.4 16.5 49.9C16.5 69.4 27.5 68.7 27.5 68.7H34.1V59.6C34.1 59.6 33.7 48.6 44.9 48.6H63.2C63.2 48.6 73.5 48.8 73.5 38.6V22.2C73.5 22.2 75.1 12 54.5 12ZM44.3 17.8C46.2 17.8 47.7 19.3 47.7 21.2C47.7 23.1 46.2 24.6 44.3 24.6C42.4 24.6 40.9 23.1 40.9 21.2C40.9 19.3 42.4 17.8 44.3 17.8Z" fill="url(#pyTop)"/>
+                        <!-- Lower Python Snake -->
+                        <path d="M55.5 98C74.8 98 73.6 89.6 73.6 89.6L73.5 80.9H55V78.2H80.9C80.9 78.2 93.5 79.6 93.5 60.1C93.5 40.6 82.5 41.3 82.5 41.3H75.9V50.4C75.9 50.4 76.3 61.4 65.1 61.4H46.8C46.8 61.4 36.5 61.2 36.5 71.4V87.8C36.5 87.8 34.9 98 55.5 98ZM65.7 92.2C63.8 92.2 62.3 90.7 62.3 88.8C62.3 86.9 63.8 85.4 65.7 85.4C67.6 85.4 69.1 86.9 69.1 88.8C69.1 90.7 67.6 92.2 65.7 92.2Z" fill="url(#pyBot)"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Brand Title -->
+        <h1 class="text-3xl sm:text-4xl font-black tracking-tight text-center px-4 rainbow-text">
+            Vittal Python Compiler
+        </h1>
+        <p class="text-xs sm:text-sm text-cyan-300/80 font-medium tracking-widest uppercase mt-2">
+            Mobile Studio &bull; Python 3 Engine
+        </p>
+
+        <!-- Animated Progress Bar -->
+        <div class="w-64 sm:w-72 mt-8 bg-white/10 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/15 shadow-inner">
+            <div id="splash-progress" class="h-full w-0 rounded-full rainbow-bg transition-all duration-150"></div>
+        </div>
+        <div id="splash-status" class="mt-2.5 text-xs text-slate-300 font-mono">
+            Initializing Python 3 Engine... 0%
+        </div>
+        <div class="mt-6 text-[11px] text-purple-300/60 font-medium tracking-wide animate-pulse">
+            Tap anywhere to skip
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 2. TOP BRAND HEADER & PRIMARY CONTROLS                    -->
+    <!-- ========================================================= -->
+    <header class="px-3 py-2.5 bg-[var(--bg-toolbar)] border-b border-white/10 flex items-center justify-between gap-2 shrink-0 z-20">
+        <!-- Brand Logo & Name -->
+        <div class="flex items-center gap-2 min-w-0">
+            <div class="w-8 h-8 rounded-xl rainbow-bg p-0.5 shrink-0 shadow-md shadow-pink-500/30">
+                <div class="w-full h-full bg-[#0f0c24] rounded-[10px] flex items-center justify-center font-black text-sm text-cyan-300">
+                    V
+                </div>
+            </div>
+            <div class="truncate">
+                <h2 class="font-extrabold text-sm sm:text-base leading-tight truncate rainbow-text">
+                    Vittal Python Compiler
+                </h2>
+                <div class="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span>Python 3 Ready</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Action Controls -->
+        <div class="flex items-center gap-1.5 shrink-0">
+            <!-- Theme Switcher Button -->
+            <button id="theme-btn" title="Switch Color Theme" class="p-2 rounded-xl bg-white/10 hover:bg-white/15 active:scale-95 text-amber-300 border border-white/10 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                </svg>
+            </button>
+
+            <!-- Rainbow Typing Sparkles Toggle -->
+            <button id="fx-toggle-btn" title="Toggle Rainbow Typing Sparks" class="p-2 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-400/40 active:scale-95 transition">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                </svg>
+            </button>
+
+            <!-- Prominent Run Button -->
+            <button id="run-btn" class="run-btn-glow px-4 py-2 rounded-xl font-extrabold text-xs sm:text-sm text-white flex items-center gap-1.5 active:scale-95 transition cursor-pointer">
+                <svg class="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                    <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
+                </svg>
+                <span>RUN</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- ========================================================= -->
+    <!-- 3. SECONDARY UTILITY BAR (SAMPLES, COPY, SAVE, FONT)      -->
+    <!-- ========================================================= -->
+    <div class="px-2.5 py-1.5 bg-[var(--bg-main)] border-b border-white/10 flex items-center justify-between gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
+        <!-- Sample Scripts Selector -->
+        <div class="flex items-center gap-1.5 shrink-0">
+            <span class="text-[11px] font-bold text-purple-400">Examples:</span>
+            <select id="sample-select" class="bg-white/10 text-xs font-semibold text-cyan-200 rounded-lg px-2 py-1 border border-purple-500/30 outline-none focus:border-cyan-400">
+                <option value="welcome" class="bg-slate-900">1. Rainbow Welcome</option>
+                <option value="calculator" class="bg-slate-900">2. Interactive Calc</option>
+                <option value="fibonacci" class="bg-slate-900">3. Fibonacci Series</option>
+                <option value="guess" class="bg-slate-900">4. Guess Number Game</option>
+                <option value="pyramid" class="bg-slate-900">5. Star Pyramid</option>
+            </select>
+        </div>
+
+        <!-- File & Editor Actions -->
+        <div class="flex items-center gap-1 shrink-0">
+            <div class="flex items-center bg-white/5 rounded-lg border border-white/10 overflow-hidden">
+                <button id="font-dec-btn" title="Decrease Font Size" class="px-2 py-1 hover:bg-white/15 active:bg-pink-500/30 text-[11px] font-extrabold text-pink-300 transition">
+                    A-
+                </button>
+                <span id="font-size-badge" class="px-1.5 text-[10px] font-mono text-slate-400 border-x border-white/10">14</span>
+                <button id="font-inc-btn" title="Increase Font Size" class="px-2 py-1 hover:bg-white/15 active:bg-cyan-500/30 text-[11px] font-extrabold text-cyan-300 transition">
+                    A+
+                </button>
+            </div>
+            <button id="copy-btn" class="px-2 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-[11px] font-bold text-cyan-300 border border-cyan-400/30">
+                Copy
+            </button>
+            <button id="download-btn" class="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-[11px] font-bold text-emerald-300 border border-emerald-400/30">
+                .py
+            </button>
+            <button id="clear-btn" class="px-2 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-[11px] font-bold text-rose-300 border border-rose-400/30">
+                Clear
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 4. MOBILE TAB SWITCHER (CODE EDITOR vs CONSOLE OUTPUT)    -->
+    <!-- ========================================================= -->
+    <div class="grid grid-cols-2 bg-[var(--bg-toolbar)] p-1 border-b border-white/10 shrink-0 md:hidden">
+        <button id="tab-editor" class="py-1.5 rounded-lg text-xs font-extrabold tracking-wide bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow">
+            &lt;/&gt; main.py
+        </button>
+        <button id="tab-console" class="py-1.5 rounded-lg text-xs font-extrabold tracking-wide text-slate-400 flex items-center justify-center gap-1.5">
+            <span>&gt;_ Output Console</span>
+            <span id="console-badge" class="hidden w-2 h-2 rounded-full bg-emerald-400"></span>
+        </button>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 5. MAIN WORKSPACE: SPLIT ON TABLET/DESKTOP, TABBED MOBILE -->
+    <!-- ========================================================= -->
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+        <!-- CODE EDITOR PANE -->
+        <section id="editor-pane" class="flex-1 flex flex-col min-h-0 md:border-r md:border-white/10">
+            <div class="editor-container" id="editor-container">
+                <div class="line-numbers" id="line-numbers">1</div>
+                <div class="code-wrapper">
+                    <div id="active-line-highlight"></div>
+                    <pre id="code-backdrop" aria-hidden="true"></pre>
+                    <textarea id="code-input" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" placeholder="# Write your Python code here..."></textarea>
+                </div>
+            </div>
+        </section>
+
+        <!-- OUTPUT CONSOLE PANE -->
+        <section id="console-pane" class="hidden md:flex md:w-[44%] flex-col bg-[#06050e] min-h-0">
+            <!-- Console Top Bar -->
+            <div class="px-3 py-2 bg-white/5 border-b border-white/10 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    <span class="text-xs font-bold text-slate-300 ml-1">Terminal Output</span>
+                </div>
+                <button id="clear-console-btn" class="text-[11px] font-semibold text-slate-400 hover:text-white px-2 py-0.5 rounded bg-white/5">
+                    Clear Output
+                </button>
+            </div>
+
+            <!-- Console Output Log -->
+            <div id="console-output" style="font-size: var(--terminal-font-size);" class="flex-1 p-3.5 font-mono overflow-y-auto space-y-1.5 leading-relaxed">
+                <div class="text-cyan-400 font-semibold">✨ Welcome to Vittal Python Compiler!</div>
+                <div class="text-slate-400">Tap <span class="text-emerald-400 font-bold">▶ RUN</span> at the top to execute your Python script.</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ========================================================= -->
+    <!-- 6. MOBILE QUICK-INSERT COLOURFUL SYMBOL TOOLBAR           -->
+    <!-- ========================================================= -->
+    <div id="symbol-toolbar" class="bg-[var(--bg-toolbar)] border-t border-white/15 px-1.5 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 z-20">
+        <button data-insert="    " class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-purple-500/25 text-purple-200 border border-purple-400/40 font-mono text-xs font-bold">TAB</button>
+        <button data-insert=":" class="sym-key shrink-0 px-3 py-1.5 rounded-lg bg-pink-500/25 text-pink-200 border border-pink-400/40 font-mono text-xs font-bold">:</button>
+        <button data-insert="()" data-cursor="-1" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-cyan-500/25 text-cyan-200 border border-cyan-400/40 font-mono text-xs font-bold">()</button>
+        <button data-insert='""' data-cursor="-1" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-amber-500/25 text-amber-200 border border-amber-400/40 font-mono text-xs font-bold">""</button>
+        <button data-insert="[]" data-cursor="-1" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-emerald-500/25 text-emerald-200 border border-emerald-400/40 font-mono text-xs font-bold">[]</button>
+        <button data-insert="=" class="sym-key shrink-0 px-3 py-1.5 rounded-lg bg-indigo-500/25 text-indigo-200 border border-indigo-400/40 font-mono text-xs font-bold">=</button>
+        <button data-insert="print()" data-cursor="-1" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-sky-500/25 text-sky-200 border border-sky-400/40 font-mono text-xs font-bold">print()</button>
+        <button data-insert="input()" data-cursor="-1" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-fuchsia-500/25 text-fuchsia-200 border border-fuchsia-400/40 font-mono text-xs font-bold">input()</button>
+        <button data-insert="if " class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-rose-500/25 text-rose-200 border border-rose-400/40 font-mono text-xs font-bold">if</button>
+        <button data-insert="for i in range():" data-cursor="-2" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-teal-500/25 text-teal-200 border border-teal-400/40 font-mono text-xs font-bold">for</button>
+        <button data-insert="def " class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-orange-500/25 text-orange-200 border border-orange-400/40 font-mono text-xs font-bold">def</button>
+        <button data-insert="+" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-white/10 text-white font-mono text-xs font-bold">+</button>
+        <button data-insert="-" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-white/10 text-white font-mono text-xs font-bold">-</button>
+        <button data-insert="*" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-white/10 text-white font-mono text-xs font-bold">*</button>
+        <button data-insert="/" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-white/10 text-white font-mono text-xs font-bold">/</button>
+        <button data-insert="#" class="sym-key shrink-0 px-2.5 py-1.5 rounded-lg bg-white/10 text-slate-300 font-mono text-xs font-bold">#</button>
+    </div>
+
+    <!-- Toast Notification Banner (Replaces alert) -->
+    <div id="toast-msg" class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-slate-900/95 text-cyan-300 border border-cyan-400/40 text-xs font-bold shadow-xl opacity-0 pointer-events-none transition-opacity duration-300">
+        Copied!
+    </div>
+
+    <script>
+        // =============================================================
+        // SAMPLE PYTHON PROGRAMS FOR INSTANT TESTING
+        // =============================================================
+        const SAMPLES = {
+            welcome: `# Welcome to Vittal Python Compiler!
+# Test inline terminal input() right in the console!
+
+name = input("Enter your name: ")
+fav_num = int(input("Enter your favorite number: "))
+
+print("====================================")
+print(f"Hello, {name}! Welcome to Vittal IDE")
+print("====================================")
+
+colors = ["Red", "Orange", "Yellow", "Green", "Cyan", "Purple"]
+for index, color in enumerate(colors, 1):
+    print(f"Color #{index}: {color}")
+
+print(f"\\n{fav_num} x 10 = {fav_num * 10}")`,
+
+            calculator: `# Interactive Mobile Calculator
+print("--- Vittal Python Calculator ---")
+a = float(input("Enter first number: "))
+op = input("Choose operator (+, -, *, /): ")
+b = float(input("Enter second number: "))
+
+if op == "+":
+    print(f"Result: {a} + {b} = {a + b}")
+elif op == "-":
+    print(f"Result: {a} - {b} = {a - b}")
+elif op == "*":
+    print(f"Result: {a} * {b} = {a * b}")
+elif op == "/":
+    if b != 0:
+        print(f"Result: {a} / {b} = {round(a / b, 4)}")
+    else:
+        print("Error: Cannot divide by zero!")
+else:
+    print("Invalid operator selected!")`,
+
+            fibonacci: `# Colorful Fibonacci Sequence Generator
+terms = int(input("How many Fibonacci terms? (e.g., 10): "))
+n1, n2 = 0, 1
+count = 0
+
+print(f"\\nGenerating {terms} Fibonacci numbers:")
+while count < terms:
+    print(f"Term {count + 1}: {n1}")
+    nth = n1 + n2
+    n1 = n2
+    n2 = nth
+    count += 1`,
+
+            guess: `# Mini Number Guessing Game
+import random
+
+secret = random.randint(1, 10)
+print("I am thinking of a number between 1 and 10!")
+
+for attempt in range(1, 4):
+    guess = int(input(f"Attempt {attempt}/3 - Your guess: "))
+    if guess == secret:
+        print(f"🎉 BOOM! You guessed {secret} in {attempt} tries!")
+        break
+    elif guess < secret:
+        print("Too low! Try higher.")
+    else:
+        print("Too high! Try lower.")
+else:
+    print(f"Game Over! The secret number was {secret}.")`,
+
+            pyramid: `# Neon Star Pyramid Pattern
+rows = int(input("Enter pyramid height (e.g., 6): "))
+print("")
+for i in range(1, rows + 1):
+    spaces = " " * (rows - i)
+    stars = "★ " * i
+    print(spaces + stars)`
+        };
+
+        // =============================================================
+        // DOM ELEMENT REFERENCES
+        // =============================================================
+        const splashScreen = document.getElementById('splash-screen');
+        const splashProgress = document.getElementById('splash-progress');
+        const splashStatus = document.getElementById('splash-status');
+
+        const codeInput = document.getElementById('code-input');
+        const codeBackdrop = document.getElementById('code-backdrop');
+        const lineNumbers = document.getElementById('line-numbers');
+        const activeLineHighlight = document.getElementById('active-line-highlight');
+
+        const runBtn = document.getElementById('run-btn');
+        const consoleOutput = document.getElementById('console-output');
+        const clearConsoleBtn = document.getElementById('clear-console-btn');
+        const sampleSelect = document.getElementById('sample-select');
+
+        const tabEditor = document.getElementById('tab-editor');
+        const tabConsole = document.getElementById('tab-console');
+        const editorPane = document.getElementById('editor-pane');
+        const consolePane = document.getElementById('console-pane');
+        const consoleBadge = document.getElementById('console-badge');
+
+        const themeBtn = document.getElementById('theme-btn');
+        const fxToggleBtn = document.getElementById('fx-toggle-btn');
+        const fontDecBtn = document.getElementById('font-dec-btn');
+        const fontIncBtn = document.getElementById('font-inc-btn');
+        const fontSizeBadge = document.getElementById('font-size-badge');
+        const copyBtn = document.getElementById('copy-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const toastMsg = document.getElementById('toast-msg');
+
+        // State Variables
+        let rainbowParticlesEnabled = true;
+        let currentThemeIndex = 0;
+        const themes = [
+            { name: 'Cyber Neon', className: 'theme-cyber' },
+            { name: 'Rainbow Candy', className: 'theme-candy' },
+            { name: 'Midnight Aurora', className: 'theme-aurora' }
+        ];
+        let currentFontSize = 14;
+        const MIN_FONT_SIZE = 11;
+        const MAX_FONT_SIZE = 22;
+
+        // =============================================================
+        // 1. SPLASH SCREEN LOADING SEQUENCE (~2.6s + TAP TO SKIP)
+        // =============================================================
+        let splashDismissed = false;
+        let splashTimer = null;
+
+        function dismissSplash() {
+            if (splashDismissed) return;
+            splashDismissed = true;
+            if (splashTimer) clearInterval(splashTimer);
+            splashScreen.classList.add('fade-out');
+            setTimeout(() => {
+                if (splashScreen && splashScreen.parentNode) {
+                    splashScreen.remove();
+                }
+            }, 650);
+        }
+
+        splashScreen.addEventListener('click', dismissSplash);
+
+        window.addEventListener('load', () => {
+            const totalDuration = 2600; // ~2.6 seconds
+            const stepInterval = 65;
+            const totalSteps = Math.floor(totalDuration / stepInterval);
+            let currentStep = 0;
+
+            const stages = [
+                "Initializing Python 3 Engine...",
+                "Loading Syntax Highlighter...",
+                "Configuring Rainbow Sparks...",
+                "Ready!"
+            ];
+
+            splashTimer = setInterval(() => {
+                currentStep++;
+                const progress = Math.min(100, Math.round((currentStep / totalSteps) * 100));
+                splashProgress.style.width = `${progress}%`;
+
+                if (progress < 35) {
+                    splashStatus.textContent = `${stages[0]} ${progress}%`;
+                } else if (progress < 70) {
+                    splashStatus.textContent = `${stages[1]} ${progress}%`;
+                } else if (progress < 100) {
+                    splashStatus.textContent = `${stages[2]} ${progress}%`;
+                } else {
+                    splashStatus.textContent = `${stages[3]} 100%`;
+                    clearInterval(splashTimer);
+                    setTimeout(dismissSplash, 250);
+                }
+            }, stepInterval);
+
+            // Load default interactive welcome code
+            codeInput.value = SAMPLES.welcome;
+            updateEditorView();
+        });
+
+        // =============================================================
+        // 2. MULTI-COLOUR PYTHON SYNTAX HIGHLIGHTER
+        // =============================================================
+        function escapeHtml(str) {
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+        }
+
+        function highlightPython(code) {
+            // Single-pass regex tokenizer for safe, accurate Python coloring
+            const tokenRegex = /(#.*$)|("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b|\b(print|input|len|range|int|float|str|list|dict|set|tuple|bool|round|abs|sum|min|max|enumerate|zip|open|type)\b|\b(\d+(?:\.\d+)?)\b|([+\-*/%=<>!&|^~]+)|([()[\]{}:,.])/gm;
+
+            let result = '';
+            let lastIndex = 0;
+            let match;
+
+            while ((match = tokenRegex.exec(code)) !== null) {
+                // Append unhighlighted plain text before token
+                if (match.index > lastIndex) {
+                    result += escapeHtml(code.slice(lastIndex, match.index));
+                }
+
+                const [full, comment, str, kw, builtin, num, op, paren] = match;
+
+                if (comment !== undefined) {
+                    result += `<span class="tok-comment">${escapeHtml(comment)}</span>`;
+                } else if (str !== undefined) {
+                    result += `<span class="tok-string">${escapeHtml(str)}</span>`;
+                } else if (kw !== undefined) {
+                    result += `<span class="tok-keyword">${escapeHtml(kw)}</span>`;
+                } else if (builtin !== undefined) {
+                    result += `<span class="tok-builtin">${escapeHtml(builtin)}</span>`;
+                } else if (num !== undefined) {
+                    result += `<span class="tok-number">${escapeHtml(num)}</span>`;
+                } else if (op !== undefined) {
+                    result += `<span class="tok-op">${escapeHtml(op)}</span>`;
+                } else if (paren !== undefined) {
+                    result += `<span class="tok-paren">${escapeHtml(paren)}</span>`;
+                }
+
+                lastIndex = tokenRegex.lastIndex;
+            }
+
+            if (lastIndex < code.length) {
+                result += escapeHtml(code.slice(lastIndex));
+            }
+
+            // Ensure trailing newline renders properly in <pre>
+            if (code.endsWith('\n')) {
+                result += ' ';
+            }
+            return result;
+        }
+
+        function updateEditorView() {
+            const code = codeInput.value;
+            codeBackdrop.innerHTML = highlightPython(code);
+
+            // Calculate active line number
+            const cursorPos = codeInput.selectionStart || 0;
+            const activeLine = code.slice(0, cursorPos).split('\n').length;
+            const totalLines = code.split('\n').length;
+
+            // Update line numbers column
+            let numsHtml = '';
+            for (let i = 1; i <= totalLines; i++) {
+                if (i === activeLine) {
+                    numsHtml += `<div class="active-line-num">${i}</div>`;
+                } else {
+                    numsHtml += `<div>${i}</div>`;
+                }
+            }
+            lineNumbers.innerHTML = numsHtml;
+
+            // Move active line rainbow highlight bar
+            const lineHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--editor-line-height')) || 22;
+            const topOffset = 14 + (activeLine - 1) * lineHeight - codeInput.scrollTop;
+            activeLineHighlight.style.top = `${topOffset}px`;
+        }
+
+        // Sync scrolling between textarea, syntax backdrop, and line numbers
+        codeInput.addEventListener('scroll', () => {
+            codeBackdrop.scrollTop = codeInput.scrollTop;
+            codeBackdrop.scrollLeft = codeInput.scrollLeft;
+            lineNumbers.scrollTop = codeInput.scrollTop;
+            updateEditorView();
+        });
+
+        codeInput.addEventListener('input', (e) => {
+            updateEditorView();
+            if (rainbowParticlesEnabled) {
+                spawnRainbowBurst();
+            }
+        });
+
+        codeInput.addEventListener('click', updateEditorView);
+        codeInput.addEventListener('keyup', updateEditorView);
+
+        // Smart Auto-Indent on Enter & Tab support
+        codeInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                insertAtCursor('    ', 0);
+            } else if (e.key === 'Enter') {
+                const start = codeInput.selectionStart;
+                const val = codeInput.value;
+                const currentLineStart = val.lastIndexOf('\n', start - 1) + 1;
+                const currentLine = val.slice(currentLineStart, start);
+                const indentMatch = currentLine.match(/^\s*/);
+                let indent = indentMatch ? indentMatch[0] : '';
+
+                // Increase indent if line ends with colon ':'
+                if (currentLine.trim().endsWith(':')) {
+                    indent += '    ';
+                }
+
+                if (indent.length > 0) {
+                    e.preventDefault();
+                    insertAtCursor('\n' + indent, 0);
+                }
+            }
+        });
+
+        // =============================================================
+        // 3. RAINBOW PARTICLE BURSTS WHILE TYPING
+        // =============================================================
+        const fxCanvas = document.getElementById('fx-canvas');
+        const fxCtx = fxCanvas.getContext('2d');
+        let particles = [];
+        const neonColors = ['#ff2a85', '#00f0ff', '#facc15', '#4ade80', '#c084fc', '#fb923c'];
+
+        function resizeFxCanvas() {
+            fxCanvas.width = window.innerWidth;
+            fxCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeFxCanvas);
+        resizeFxCanvas();
+
+        function spawnRainbowBurst() {
+            const rect = codeInput.getBoundingClientRect();
+            const cursorPos = codeInput.selectionStart || 0;
+            const linesBefore = codeInput.value.slice(0, cursorPos).split('\n');
+            const row = linesBefore.length - 1;
+            const col = linesBefore[linesBefore.length - 1].length;
+
+            const x = Math.min(rect.right - 20, Math.max(rect.left + 20, rect.left + 14 + col * 8.4 - codeInput.scrollLeft));
+            const y = Math.min(rect.bottom - 20, Math.max(rect.top + 20, rect.top + 24 + row * 22 - codeInput.scrollTop));
+
+            for (let i = 0; i < 6; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 2.5 + 1;
+                particles.push({
+                    x,
+                    y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 1,
+                    size: Math.random() * 3.5 + 2,
+                    color: neonColors[Math.floor(Math.random() * neonColors.length)],
+                    alpha: 1
+                });
+            }
+        }
+
+        function animateParticles() {
+            fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.08;
+                p.alpha -= 0.035;
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    fxCtx.globalAlpha = p.alpha;
+                    fxCtx.fillStyle = p.color;
+                    fxCtx.beginPath();
+                    fxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    fxCtx.fill();
+                }
+            }
+            fxCtx.globalAlpha = 1;
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+        // =============================================================
+        // 4. MOBILE QUICK-INSERT SYMBOL TOOLBAR
+        // =============================================================
+        function insertAtCursor(text, cursorOffset = 0) {
+            const start = codeInput.selectionStart;
+            const end = codeInput.selectionEnd;
+            const val = codeInput.value;
+
+            codeInput.value = val.slice(0, start) + text + val.slice(end);
+            const newPos = start + text.length + cursorOffset;
+            codeInput.focus();
+            codeInput.setSelectionRange(newPos, newPos);
+            updateEditorView();
+            if (rainbowParticlesEnabled) spawnRainbowBurst();
+        }
+
+        document.querySelectorAll('.sym-key').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const text = btn.getAttribute('data-insert');
+                const offset = parseInt(btn.getAttribute('data-cursor') || '0', 10);
+                insertAtCursor(text, offset);
+            });
+        });
+
+        // =============================================================
+        // 5. MOBILE TAB SWITCHING (EDITOR / CONSOLE)
+        // =============================================================
+        function showMobileTab(tab) {
+            if (window.innerWidth >= 768) return; // Desktop shows split screen
+            if (tab === 'editor') {
+                editorPane.classList.remove('hidden');
+                consolePane.classList.add('hidden');
+                consolePane.classList.remove('flex');
+                tabEditor.className = 'py-1.5 rounded-lg text-xs font-extrabold tracking-wide bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow';
+                tabConsole.className = 'py-1.5 rounded-lg text-xs font-extrabold tracking-wide text-slate-400 flex items-center justify-center gap-1.5';
+            } else {
+                editorPane.classList.add('hidden');
+                consolePane.classList.remove('hidden');
+                consolePane.classList.add('flex');
+                consoleBadge.classList.add('hidden');
+                tabConsole.className = 'py-1.5 rounded-lg text-xs font-extrabold tracking-wide bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 shadow flex items-center justify-center gap-1.5';
+                tabEditor.className = 'py-1.5 rounded-lg text-xs font-extrabold tracking-wide text-slate-400';
+            }
+        }
+
+        tabEditor.addEventListener('click', () => showMobileTab('editor'));
+        tabConsole.addEventListener('click', () => showMobileTab('console'));
+
+        // =============================================================
+        // 6. REAL PYTHON 3 COMPILER & EXECUTION ENGINE (SKULPT)
+        // =============================================================
+        function appendConsoleLine(text, type = 'stdout') {
+            const line = document.createElement('div');
+            line.className = 'whitespace-pre-wrap break-words';
+            if (type === 'error') {
+                line.className += ' text-rose-400 bg-rose-950/40 p-2 rounded-lg border border-rose-500/30 font-semibold';
+            } else if (type === 'system') {
+                line.className += ' text-cyan-400 text-xs font-semibold';
+            } else if (type === 'input-echo') {
+                line.className += ' text-amber-300 font-semibold';
+            } else {
+                line.className += ' text-emerald-300';
+            }
+            line.textContent = text;
+            consoleOutput.appendChild(line);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        // Inline Terminal input() handler (No browser popup!)
+        function pythonInputHandler(promptText) {
+            return new Promise((resolve) => {
+                const promptRow = document.createElement('div');
+                promptRow.className = 'flex flex-wrap items-center gap-1.5 bg-purple-950/50 border border-cyan-400/40 rounded-lg px-2.5 py-1.5 my-1 shadow-inner';
+
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'text-amber-300 font-bold whitespace-pre-wrap';
+                labelSpan.textContent = promptText || '>';
+
+                const cursorSpan = document.createElement('span');
+                cursorSpan.className = 'text-cyan-400 font-black terminal-blink select-none';
+                cursorSpan.textContent = '▋';
+
+                const inlineInput = document.createElement('input');
+                inlineInput.type = 'text';
+                inlineInput.autocomplete = 'off';
+                inlineInput.spellcheck = false;
+                inlineInput.placeholder = 'type here & press Enter...';
+                inlineInput.className = 'flex-1 min-w-[120px] bg-transparent text-cyan-200 font-mono font-semibold outline-none border-b border-cyan-400/50 focus:border-pink-400 px-1 py-0.5';
+
+                const enterBtn = document.createElement('button');
+                enterBtn.type = 'button';
+                enterBtn.className = 'px-2.5 py-1 rounded-md bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-extrabold text-[11px] active:scale-95 shrink-0 shadow';
+                enterBtn.textContent = 'Enter ↵';
+
+                promptRow.appendChild(labelSpan);
+                promptRow.appendChild(cursorSpan);
+                promptRow.appendChild(inlineInput);
+                promptRow.appendChild(enterBtn);
+
+                consoleOutput.appendChild(promptRow);
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+                // Focus the inline input field smoothly
+                setTimeout(() => inlineInput.focus(), 30);
+
+                let submitted = false;
+                const submitInput = () => {
+                    if (submitted) return;
+                    submitted = true;
+                    const userVal = inlineInput.value;
+
+                    // Replace active prompt row with static terminal echo line
+                    promptRow.remove();
+                    const echoLine = document.createElement('div');
+                    echoLine.className = 'whitespace-pre-wrap break-words';
+                    echoLine.innerHTML = `<span class="text-amber-300 font-semibold">${escapeHtml(promptText || '')}</span><span class="text-cyan-300 font-bold underline decoration-pink-500/60">${escapeHtml(userVal)}</span>`;
+                    consoleOutput.appendChild(echoLine);
+                    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+                    resolve(userVal);
+                };
+
+                enterBtn.addEventListener('click', submitInput);
+                inlineInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitInput();
+                    }
+                });
+            });
+        }
+
+        function builtinRead(x) {
+            if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) {
+                throw "File not found: '" + x + "'";
+            }
+            return Sk.builtinFiles["files"][x];
+        }
+
+        async function runPythonCode() {
+            const prog = codeInput.value;
+            consoleOutput.innerHTML = '';
+            showMobileTab('console');
+            consoleBadge.classList.remove('hidden');
+
+            appendConsoleLine("▶ Running Vittal Python 3...", "system");
+            const startTime = performance.now();
+
+            Sk.pre = "console-output";
+            Sk.configure({
+                output: (text) => {
+                    // Strip trailing newline since appendConsoleLine creates block divs
+                    const cleaned = text.endsWith('\n') ? text.slice(0, -1) : text;
+                    if (cleaned.length > 0 || text === '\n') {
+                        appendConsoleLine(cleaned, 'stdout');
+                    }
+                },
+                read: builtinRead,
+                inputfun: pythonInputHandler,
+                inputfunTakesPrompt: true,
+                __future__: Sk.python3
+            });
+
+            try {
+                await Sk.misceval.asyncToPromise(() => {
+                    return Sk.importMainWithBody("<stdin>", false, prog, true);
+                });
+                const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+                appendConsoleLine(`\n✔ Process finished in ${elapsed}s`, "system");
+            } catch (err) {
+                appendConsoleLine(`\n❌ ${err.toString()}`, "error");
+            }
+        }
+
+        runBtn.addEventListener('click', runPythonCode);
+
+        // =============================================================
+        // 7. PUBLISHING EXTRAS: THEMES, SAMPLES, COPY, SAVE, TOAST
+        // =============================================================
+        function showToast(message) {
+            toastMsg.textContent = message;
+            toastMsg.classList.remove('opacity-0');
+            setTimeout(() => {
+                toastMsg.classList.add('opacity-0');
+            }, 2000);
+        }
+
+        themeBtn.addEventListener('click', () => {
+            document.body.classList.remove(themes[currentThemeIndex].className);
+            currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+            document.body.classList.add(themes[currentThemeIndex].className);
+            showToast(`Theme: ${themes[currentThemeIndex].name}`);
+        });
+
+        fxToggleBtn.addEventListener('click', () => {
+            rainbowParticlesEnabled = !rainbowParticlesEnabled;
+            fxToggleBtn.classList.toggle('opacity-40', !rainbowParticlesEnabled);
+            showToast(rainbowParticlesEnabled ? "Rainbow Typing Sparks: ON ✨" : "Rainbow Typing Sparks: OFF");
+        });
+
+        function applyFontSize(newSize) {
+            currentFontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, newSize));
+            document.documentElement.style.setProperty('--editor-font-size', `${currentFontSize}px`);
+            document.documentElement.style.setProperty('--editor-line-height', `${currentFontSize + 8}px`);
+            document.documentElement.style.setProperty('--terminal-font-size', `${Math.max(11, currentFontSize - 1)}px`);
+            fontSizeBadge.textContent = currentFontSize;
+            updateEditorView();
+            showToast(`Font Size: ${currentFontSize}px`);
+        }
+
+        fontDecBtn.addEventListener('click', () => {
+            applyFontSize(currentFontSize - 1);
+        });
+
+        fontIncBtn.addEventListener('click', () => {
+            applyFontSize(currentFontSize + 1);
+        });
+
+        sampleSelect.addEventListener('change', (e) => {
+            const key = e.target.value;
+            if (SAMPLES[key]) {
+                codeInput.value = SAMPLES[key];
+                updateEditorView();
+                showMobileTab('editor');
+                showToast(`Loaded: ${e.target.options[e.target.selectedIndex].text}`);
+            }
+        });
+
+        copyBtn.addEventListener('click', () => {
+            codeInput.select();
+            document.execCommand('copy');
+            window.getSelection().removeAllRanges();
+            showToast("Code copied to clipboard!");
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            const blob = new Blob([codeInput.value], { type: 'text/x-python' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'vittal_script.py';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("Saved vittal_script.py");
+        });
+
+        clearBtn.addEventListener('click', () => {
+            codeInput.value = '';
+            updateEditorView();
+            codeInput.focus();
+            showToast("Editor cleared");
+        });
+
+        clearConsoleBtn.addEventListener('click', () => {
+            consoleOutput.innerHTML = '<div class="text-slate-500 text-xs">Console cleared.</div>';
+        });
+    </script>
+</body>
+</html>
